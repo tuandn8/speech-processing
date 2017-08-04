@@ -1,8 +1,6 @@
 from scipy.fftpack import fft, ifft
 import numpy as np 
 
-
-
 def lpc(x, N):
     # calcualte autocorrelation vector or matrix
     X = fft(x, 2** nextpow2(2*len(x) - 1))
@@ -11,8 +9,7 @@ def lpc(x, N):
     print R.shape
     
     a, e,  ref = levinson(R, N)
-
-    return a
+    return a, e, ref
 
 def levinson(R, n):
     a = np.zeros((n,1), dtype=float)
@@ -39,7 +36,6 @@ def levinson(R, n):
     return a, E, ref
 
 
-
 def nextpow2(x):
     res = np.ceil(np.log2(x))
     return res.astype('int')
@@ -59,7 +55,6 @@ print a.shape
 a = np.fliplr(a)
 a = np.append(a, 0)
 print a.shape
-
 
 est_x = lfilter(-a, [1], x)
 e = x - est_x
