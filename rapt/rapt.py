@@ -306,7 +306,7 @@ class Rapt:
 
             candidates[k] = self._get_correlation(audio, fs, current_frame, current_lag)
 
-            if candidates[k] < max_correlation_val:
+            if candidates[k] > max_correlation_val:
                 max_correlation_val = candidates[k]
 
         return (candidates, max_correlation_val)
