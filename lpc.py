@@ -6,7 +6,7 @@ def lpc(x, N):
     X = fft(x, 2** nextpow2(2*len(x) - 1))
     R = np.real(ifft(abs(X)**2))
     R = R/(N-1)
-    print R.shape
+    print(R.shape)
     
     a, e,  ref = levinson(R, N)
     return a, e, ref
