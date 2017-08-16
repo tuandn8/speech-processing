@@ -194,7 +194,7 @@ class Rapt:
         lag_range = (self.nccfparams.longest_lag_per_frame - 1) - self.nccfparams.shortest_lag_per_frame
         candidates = [None] * self.nccfparams.max_frame_count
 
-        for i in range(self.nccfparams.max_frame_count):
+        for i in range(0, self.nccfparams.max_frame_count):
             all_lag_results = self._get_correlations_for_all_lags(audio, i, lag_range)
 
             candidates[i] = self._get_marked_results(all_lag_results, False)
@@ -217,7 +217,7 @@ class Rapt:
         lag_range = (self.nccfparams.longest_lag_per_frame - 1) - self.nccfparams.shortest_lag_per_frame
         candidates = [None] * self.nccfparams.max_frame_count
 
-        for i in range(self.nccfparams.max_frame_count):
+        for i in range(0, self.nccfparams.max_frame_count):
             candidates[i] = self._get_firstpass_frame_results(audio, fs, i, lag_range)
 
         return candidates
@@ -238,9 +238,33 @@ class Rapt:
         candidates = [None] * self.nccfparams.max_frame_count
 
         for i in range(self.nccfparams.max_frame_count):
-            candidates[i] = self._get_secondpass_frame_result(original_audio, fs, i, lag_range, first_pass)
+            candidates[i] = self._get_secondpass_frame_results(original_audio, fs, i, lag_range, first_pass)
         
         return candidates
+
+
+    def _get_nccf_params(self, audio, fs, is_first_pass):
+        """Creates and returns nccf params object w/ nccf-specific values"""
+        self.nccfparams = nccfparams.Nccfparams()
+
+        # value 'n' in NCCF equation
+        self.nccfparams.samples_correlated_per_lag = int(round(self.params.correlation_window_size * fs))
+        
+        # start value of k in NCCF equation
+        if is_first_pass:
+            self.nccfparams.shortest_lag_per_frame = int(round(fs/self.params.maximum_allowed_freq))
+        else:
+            self.nccfparams.shortest_lag_per_frame = 0
+
+        # value 'K' in NCCF equation
+        self.nccfparams.longest_lag_per_frame = int(round(fs/self.params.minimum_allowed_freq))
+
+        # value z in NCCF equation
+        self.nccfparams.samples_per_frame = int(round(self.params.frame_step_size * fs))
+
+        # value of M-1 in NCCF equation
+        self.nccfparams.max_frame_count = int(round(float(len(audio)) / float(self.nccfparams.samples_per_frame)) - 1)
+
 
     def _get_firstpass_frame_results(self, audio, fs, current_frame, lag_range):
         """
@@ -253,7 +277,7 @@ class Rapt:
         return marked_values
 
     
-    def _get_secondpass_frame_result(self, audio, fs, current_frame, lag_range, first_pass):
+    def _get_secondpass_frame_results(self, audio, fs, current_frame, lag_range, first_pass):
         """
         Calculate correlation for all lags and get the highest correctional value
         from the calculated lags and first pass
@@ -345,17 +369,17 @@ class Rapt:
         return returned_candidates
 
     
-    def _get_correlation(self, audio, fs, frame, lag, is_first_pass = True):
+    def _get_correlation(self, audio_sample, fs, frame, lag, is_first_pass = True):
         samples = 0
         samples_correlated_per_lag = self.nccfparams.samples_correlated_per_lag
         frame_start = frame * self.nccfparams.samples_per_frame
         final_correlated_sample = frame_start + samples_correlated_per_lag
 
-        frame_sum = np.sum(audio[frame_start:final_correlated_sample])
+        frame_sum = np.sum(audio_sample[frame_start:final_correlated_sample])
         mean_for_window = ((1.0 / float(samples_correlated_per_lag)) * frame_sum)
 
-        audio_slice = audio[frame_start: final_correlated_sample]
-        lag_audio_slice = audio[frame_start + lag : final_correlated_sample + lag]
+        audio_slice = audio_sample[frame_start: final_correlated_sample]
+        lag_audio_slice = audio_sample[frame_start + lag : final_correlated_sample + lag]
 
         samples = np.sum((audio_slice - mean_for_window) * (lag_audio_slice - mean_for_window))
 
@@ -459,7 +483,7 @@ class Rapt:
         # Value of theta_max in NCCF equation, max for the current frame
         candidates = [0.0] * lag_range
         max_correlation_val = 0.0
-        for k in range(lag_range):
+        for k in range(0, lag_range):
             current_lag = k + self.nccfparams.shortest_lag_per_frame
 
             # determine if the current lag value causes us to go pass the end
@@ -474,29 +498,6 @@ class Rapt:
                 max_correlation_val = candidates[k]
         
         return (candidates, max_correlation_val)
-
-
-    def _get_nccf_params(self, audio, fs, is_first_pass):
-        """Creates and returns nccf params object w/ nccf-specific values"""
-        self.nccfparams = nccfparams.Nccfparams()
-
-        # value 'n' in NCCF equation
-        self.nccfparams.samples_correlated_per_lag = int(round(self.params.correlation_window_size * fs))
-        
-        # start value of k in NCCF equation
-        if is_first_pass:
-            self.nccfparams.shortest_lag_per_frame = int(round(fs/self.params.maximum_allowed_freq))
-        else:
-            self.nccfparams.shortest_lag_per_frame = 0
-
-        # value 'K' in NCCF equation
-        self.nccfparams.longest_lag_per_frame = int(round(fs/self.params.minimum_allowed_freq))
-
-        # value z in NCCF equation
-        self.nccfparams.samples_per_frame = int(round(self.params.frame_step_size * fs))
-
-        # value of M-1 in NCCF equation
-        self.nccfparams.max_frame_count = int(round(float(len(audio)) / float(self.nccfparams.samples_per_frame))) - 1
 
 
     # Dynamic programming to estimate F0
@@ -554,7 +555,7 @@ class Rapt:
             local_cost = self._calcualte_local_cost(candidate, max_for_frame, sample_rate)
 
             for initial_candidate in [(0.0, (1, 0.1)), (0.0, (0, 0.0))]:
-                delta_cost = self._get_delta_cost(candidate, initial_candidate,0)
+                delta_cost = self._get_delta_cost(candidate, initial_candidate, 0)
                 total_cost = local_cost + delta_cost
                 if best_cost is None or total_cost <= best_cost:
                     best_cost = total_cost
