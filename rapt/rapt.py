@@ -177,7 +177,6 @@ class Rapt:
 
         if downsampled_audio is not None:
             self.params.sample_rate_ratio = float(fs) / float(downsample_rate)
-            print('sample rate ratio = ', self.params.sample_rate_ratio)
         
         self.params.samples_per_frame = int(round(self.params.frame_step_size * fs))
         self.params.hanning_window_length = int(round(0.03 * fs))
@@ -187,11 +186,6 @@ class Rapt:
         # size - so the goal here is to find diff between frame size and 20ms apart
         self.params.rms_offset = int(round(((float(fs)/1000.0) * 20.0) - 
                                     self.params.samples_per_frame))
-
-        print('sample_rate_ratio = ', self.params.sample_rate_ratio)
-        print('samples_per_frame = ', self.params.samples_per_frame)
-        print('hanning_window_length = ', self.params.hanning_window_length)
-        print('rms offset = ', self.params.rms_offset)
         
 
     def _run_nccf(self, original_audio, fs, downsampled_audio = None, downsample_rate = None):
@@ -294,13 +288,7 @@ class Rapt:
         self.nccfparams.samples_per_frame = int(round(self.params.frame_step_size * fs))
 
         # value of M-1 in NCCF equation
-        print('len audio = ', len(audio))
         self.nccfparams.max_frame_count = int(round(float(len(audio)) / float(self.nccfparams.samples_per_frame)) - 1)
-
-        print('shortest_lag_per_frame = ', self.nccfparams.shortest_lag_per_frame)
-        print('longest_lag_per_frame = ', self.nccfparams.longest_lag_per_frame )
-        print('samples_per_frame = ', self.nccfparams.samples_per_frame)
-        print('max_frame_count = ', self.nccfparams.max_frame_count)
 
 
     def _get_firstpass_frame_results(self, audio, fs, current_frame, lag_range):
@@ -442,7 +430,6 @@ class Rapt:
         most_lag = self.params.sample_rate_ratio * self.nccfparams.longest_lag_per_frame
 
         for k, k_val in enumerate(lag_results[0]):
-            #print('rapt extrapolated_cands = ',extrapolated_cands)
             if k_val > min_valid_correlation:
                 current_lag = k + self.nccfparams.shortest_lag_per_frame
                 new_lag = int(round(current_lag * self.params.sample_rate_ratio))
