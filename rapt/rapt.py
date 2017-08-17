@@ -52,6 +52,33 @@ class Rapt:
 
 
     def pitch_tracking(self, original_audio, fs):
+        self._original_audio = original_audio
+        self._fs = fs
+        if self.params.is_two_pass_nccf:
+            downsample_rate, downsampled_audio = self._get_downsampled_audio(original_audio, fs,
+                                                                self.params.maximum_allowed_freq,
+                                                                self.params.is_run_filter)
+            # calculate parameters for RAPT with input audio
+            self._calculate_params(original_audio, fs, downsampled_audio, downsample_rate)
+            
+            # get F0 candidates using NCCF
+            nccf_results = self._run_nccf(original_audio, fs, downsampled_audio, downsample_rate)
+        else:
+            self._calculate_params(original_audio, fs)
+            nccf_results = self._run_nccf(original_audio, fs)
+
+        # dynamic programming - determine voicing state at each period candidate
+        freq_estimate = self._get_freq_estimate(nccf_results[0], fs)
+
+        # filter out high freq points
+        for i, item in enumerate(freq_estimate):
+            if item > 500.0:
+                freq_estimate[i] = 0.0
+            
+        return freq_estimate
+
+
+    def rapt_with_nccf(self, original_audio, fs):
         """
         The main method that perform pitch tracking RAPT algorithm
         :param original_audio: audio signal
@@ -108,10 +135,10 @@ class Rapt:
             filtered_audio = signal.lfilter(filter_coefs, 1, original_audio)
 
             # high-pass filter
-            #freq_cutoff = 80
-            #nyquist_rate = fs/2
-            #filter_coefs = signal.firwin(taps-1, cutoff=freq_cutoff, pass_zero=False, width=0.005, window='hann', nyq=nyquist_rate)
-            #filtered_audio = signal.lfilter(filter_coefs, 1.0, filtered_audio)
+            # freq_cutoff = 80
+            # nyquist_rate = fs/2
+            # filter_coefs = signal.firwin(taps-1, cutoff=freq_cutoff, pass_zero=False, width=0.005, window='hann', nyq=nyquist_rate)
+            # filtered_audio = signal.lfilter(filter_coefs, 1.0, filtered_audio)
 
             # downsample signal
             downsampled_audio = self._downsample_audio(filtered_audio, fs, downsample_rate)
@@ -150,6 +177,7 @@ class Rapt:
 
         if downsampled_audio is not None:
             self.params.sample_rate_ratio = float(fs) / float(downsample_rate)
+            print('sample rate ratio = ', self.params.sample_rate_ratio)
         
         self.params.samples_per_frame = int(round(self.params.frame_step_size * fs))
         self.params.hanning_window_length = int(round(0.03 * fs))
@@ -159,6 +187,11 @@ class Rapt:
         # size - so the goal here is to find diff between frame size and 20ms apart
         self.params.rms_offset = int(round(((float(fs)/1000.0) * 20.0) - 
                                     self.params.samples_per_frame))
+
+        print('sample_rate_ratio = ', self.params.sample_rate_ratio)
+        print('samples_per_frame = ', self.params.samples_per_frame)
+        print('hanning_window_length = ', self.params.hanning_window_length)
+        print('rms offset = ', self.params.rms_offset)
         
 
     def _run_nccf(self, original_audio, fs, downsampled_audio = None, downsample_rate = None):
@@ -172,9 +205,7 @@ class Rapt:
         """
         if self.params.is_two_pass_nccf:
             first_pass = self._first_pass_nccf(downsampled_audio, downsample_rate)
-
             nccf_results = self._second_pass_nccf(original_audio, fs, first_pass)
-
             return (nccf_results, first_pass)
         else:
             nccf_results = self._one_pass_nccf(original_audio,fs, False)
@@ -238,7 +269,7 @@ class Rapt:
         candidates = [None] * self.nccfparams.max_frame_count
 
         for i in range(self.nccfparams.max_frame_count):
-            candidates[i] = self._get_secondpass_frame_results(original_audio, fs, i, lag_range, first_pass)
+            candidates[i] = self._get_secondpass_frame_results(original_audio, i, lag_range, first_pass)
         
         return candidates
 
@@ -263,7 +294,13 @@ class Rapt:
         self.nccfparams.samples_per_frame = int(round(self.params.frame_step_size * fs))
 
         # value of M-1 in NCCF equation
+        print('len audio = ', len(audio))
         self.nccfparams.max_frame_count = int(round(float(len(audio)) / float(self.nccfparams.samples_per_frame)) - 1)
+
+        print('shortest_lag_per_frame = ', self.nccfparams.shortest_lag_per_frame)
+        print('longest_lag_per_frame = ', self.nccfparams.longest_lag_per_frame )
+        print('samples_per_frame = ', self.nccfparams.samples_per_frame)
+        print('max_frame_count = ', self.nccfparams.max_frame_count)
 
 
     def _get_firstpass_frame_results(self, audio, fs, current_frame, lag_range):
@@ -272,18 +309,16 @@ class Rapt:
         correlation val (theta_max) from the calculated lags for each frame
         """
         all_lag_results = self._get_correlations_for_all_lags(audio, fs, current_frame, lag_range)
-
         marked_values = self._get_marked_results(all_lag_results, True)
         return marked_values
 
     
-    def _get_secondpass_frame_results(self, audio, fs, current_frame, lag_range, first_pass):
+    def _get_secondpass_frame_results(self, audio, current_frame, lag_range, first_pass):
         """
         Calculate correlation for all lags and get the highest correctional value
         from the calculated lags and first pass
         """
-        lag_results = self._get_correlations_for_input_lags(audio, fs, current_frame, first_pass, lag_range)
-
+        lag_results = self._get_correlations_for_input_lags(audio, current_frame, first_pass, lag_range)
         marked_values = self._get_marked_results(lag_results, False)
         return marked_values
 
@@ -304,7 +339,7 @@ class Rapt:
                 (current_frame * self.nccfparams.samples_per_frame)) >= len(audio):
                 continue
 
-            candidates[k] = self._get_correlation(audio, fs, current_frame, current_lag)
+            candidates[k] = self._get_correlation(audio, current_frame, current_lag)
 
             if candidates[k] > max_correlation_val:
                 max_correlation_val = candidates[k]
@@ -312,7 +347,7 @@ class Rapt:
         return (candidates, max_correlation_val)
 
         
-    def _get_correlations_for_input_lags(self, audio, fs, current_frame, first_pass, lag_range):
+    def _get_correlations_for_input_lags(self, audio, current_frame, first_pass, lag_range):
         candidates = [0.0] * lag_range
         max_correlation_val = 0.0
         sorted_firstpass_results = first_pass[current_frame]
@@ -329,27 +364,24 @@ class Rapt:
                     # end of the audio sample - if so - skip and set val to zero
                     sample_range = (k + (self.nccfparams.samples_correlated_per_lag - 1) +
                                     (current_frame * self.nccfparams.samples_per_frame))
-                    
                     if sample_range >= len(audio):
                         continue
                 
-                candidates[k] = self._get_correlation(audio, fs, current_frame, k, False)
-
-                if candidates[k] > max_correlation_val:
-                    max_correlation_val = candidates[k]
+                    candidates[k] = self._get_correlation(audio, current_frame, k, False)
+                    if candidates[k] > max_correlation_val:
+                        max_correlation_val = candidates[k]
 
         return (candidates, max_correlation_val)
+
 
     def _get_marked_results(self, lag_results, is_first_pass = True):
         # values that meet certain threshold shall be marked for consideration
         min_valid_correlation = (lag_results[1] * self.params.min_acceptable_peak_val)
         max_allowed_candidates = self.params.max_hypotheses_per_frame - 1
-
         candidates = []
         
         if is_first_pass:
-            candidates = self._extrapolate_lag_val(lag_results, min_valid_correlation,
-                                                    max_allowed_candidates)
+            candidates = self._extrapolate_lag_val(lag_results, min_valid_correlation)
         else:
             for k, kval in enumerate(lag_results[0]):
                 if kval > min_valid_correlation:
@@ -369,7 +401,7 @@ class Rapt:
         return returned_candidates
 
     
-    def _get_correlation(self, audio_sample, fs, frame, lag, is_first_pass = True):
+    def _get_correlation(self, audio_sample, frame, lag, is_first_pass = True):
         samples = 0
         samples_correlated_per_lag = self.nccfparams.samples_correlated_per_lag
         frame_start = frame * self.nccfparams.samples_per_frame
@@ -378,8 +410,8 @@ class Rapt:
         frame_sum = np.sum(audio_sample[frame_start:final_correlated_sample])
         mean_for_window = ((1.0 / float(samples_correlated_per_lag)) * frame_sum)
 
-        audio_slice = audio_sample[frame_start: final_correlated_sample]
-        lag_audio_slice = audio_sample[frame_start + lag : final_correlated_sample + lag]
+        audio_slice = audio_sample[frame_start:final_correlated_sample]
+        lag_audio_slice = audio_sample[frame_start + lag:final_correlated_sample + lag]
 
         samples = np.sum((audio_slice - mean_for_window) * (lag_audio_slice - mean_for_window))
 
@@ -395,13 +427,13 @@ class Rapt:
         return float(samples) / float(denominator)
 
 
-    def _extrapolate_lag_val(self, lag_results, min_valid_correlation, max_allowed_candidates):
+    def _extrapolate_lag_val(self, lag_results, min_valid_correlation):
         extrapolated_cands = []
-
+        
         if len(lag_results[0]) == 0:
             return extrapolated_cands
         elif len(lag_results[0]) == 1:
-            current_lag = self.nccfparams.shortest_lag_per_frame
+            current_lag = 0 + self.nccfparams.shortest_lag_per_frame
             new_lag = int(round(current_lag * self.params.sample_rate_ratio))
             extrapolated_cands.append((new_lag, lag_results[0][0]))
             return extrapolated_cands
@@ -410,9 +442,10 @@ class Rapt:
         most_lag = self.params.sample_rate_ratio * self.nccfparams.longest_lag_per_frame
 
         for k, k_val in enumerate(lag_results[0]):
+            #print('rapt extrapolated_cands = ',extrapolated_cands)
             if k_val > min_valid_correlation:
                 current_lag = k + self.nccfparams.shortest_lag_per_frame
-                new_lag = int(round(current_lag + self.params.sample_rate_ratio))
+                new_lag = int(round(current_lag * self.params.sample_rate_ratio))
 
                 if k == 0:
                     # if at 1st lag value, interpolate using 0,0 input on left
@@ -457,8 +490,7 @@ class Rapt:
                     prev_lag = k - 1 + self.nccfparams.shortest_lag_per_frame
                     new_prev = int(round(prev_lag * self.params.sample_rate_ratio))
                     lags = np.array([new_prev, new_lag, new_next])
-                    vals = np.array([lag_results[0][k-1], k_val,
-                                    lag_results[0][k+1]])
+                    vals = np.array([lag_results[0][k-1], k_val, lag_results[0][k+1]])
                     para = np.polyfit(lags, vals, 2)
                     final_lag = int(round(-para[1] / (2 * para[0])))
                     final_corr = float(para[0] * final_lag**2 + para[1] * final_lag + para[2])
@@ -473,7 +505,7 @@ class Rapt:
         return extrapolated_cands
 
 
-    def _get_peak_lg_val(self, lag_results, lag_index):
+    def _get_peak_lag_val(self, lag_results, lag_index):
         current_lag = lag_index + self.nccfparams.shortest_lag_per_frame
         extrapolated_lag = int(round(current_lag * self.params.sample_rate_ratio))
         return (extrapolated_lag, lag_results[lag_index])
@@ -492,7 +524,7 @@ class Rapt:
                     + (current_frame * self.nccfparams.samples_per_frame)) >= len(audio)):
                 continue
             
-            candidates[k] = self._get_correlation(audio, fs, current_frame, current_lag)
+            candidates[k] = self._get_correlation(audio, current_frame, current_lag)
 
             if candidates[k] > max_correlation_val:
                 max_correlation_val = candidates[k]
