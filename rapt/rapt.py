@@ -2,83 +2,61 @@ import math
 import numpy as np 
 from scipy import signal
 
-from rapt import nccfparams
-from rapt import raptparams
+import raptparams
+import nccfparams
 
 
 class Rapt:
     """rapt estimates the location of glottal closure instants (GCI), also known
-        as epochs from digitized acoustic speech signals. It simultaneously estimates
-        the local frequency (F0) and voicing state of the speech on per-epoch basis.
+        as epochs from digitized acoustic speech signals. It simultaneously
+        estimates the local frequency (F0) and voicing state of the speech on
+        per-epoch basis.
 
         The processing state are:
         * Optionally high-pass filter the signal at 80Hz to remove rumble, etc
-        * Compute the LPC residual, optaining an approximation of the differential
+        * Compute the LPC residual, obtain an approximation of the differential
           glottal flow.
         * Normalize the amplitude of the residual by a local RMS measure.
-        * Pick the prominent peaks in the glottal flow, and grade them by peakiness,
-          skew and relative amplitude.
-        * Compute correlates of voicing to serve as pseudo-probabilities of voicing,
-          voicing onset and voicing offset.
-        * For every peak selected from the residual, compute a normalized
-          cross-correlation function (NCCF) of the LPC residual with a relatively
+        * Pick the prominent peaks in the glottal flow, and grade them by
+          peakiness, skew and relative amplitude.
+        * Compute correlates of voicing to serve as pseudo-probabilities of
+          voicing, voicing onset and voicing offset.
+        * For every peak selected from the residual, compute a normalized cross-
+          correlation function (NCCF) of the LPC residual with a relatively
           short reference window centered on the peak.
-        * For each peak in the residual, hypothesize all following peaks within a
-          specified F0 seaqrch range, that might be the end of a period starting on
-          that peak.
-        * Grade each of these hypothesized periods on local measures of "voicedness"
-          using the NCCF and the pseudo-probability of voicing
+        * For each peak in the residual, hypothesize all following peaks within
+          a specified F0 search range, that might be the end of a period
+          starting on that peak.
+        * Grade each of these hypothesized periods on local measures of
+          "voiced-ness" using the NCCF and the pseudo-probability of voicing
           feature.
         * Generate an unvoiced hypothesis for each period and grade it for
           "voicelessness".
         * Do a dynamic programming iteration to grade the goodness of continuity
-          between all hypotheses that start on a peak and those that end on the same
-          peak. For voiced-voice connections add a cost for F0 transitions. For
-          unvoiced-voiced and voiced-unvoiced transitions add a cost that is
-          modulated by the voicing onset or offset inverse pseudo-probability.
-          Unvoiced-unvoiced transitions incur no cost.
+          between all hypotheses that start on a peak and those that end on the
+          same peak. For voiced-voice connections add a cost for F0
+          transitions. For unvoiced-voiced and voiced-unvoiced transitions
+          add a cost that is modulated by the voicing onset or offset inverse
+          pseudo-probability. Unvoiced-unvoiced transitions incur no cost.
         * Backtrack through the lowest-cost path developed during the
           dynamic-programming stage to determine the best peak collection in the
-          residual.  At each voiced peak, find the peak in the NCCF (computed above)
-          that corresponds to the duration closest to the inter-peak interval, and
-          use that as the inverse F0 for the peak.
+          residual.  At each voiced peak, find the peak in the NCCF
+          (computed above) that corresponds to the duration closest to the
+          inter-peak interval, and use that as the inverse F0 for the peak.
 
         References:
             Talkin, D. et al(1995). A Robust Algorithm for Pitch Tracking(RAPT).
-            Speech Coding and Synthesis, The Eds. Ams-Terdam, Netherlands:Elsevier.
+            Speech Coding and Synthesis, Netherlands:Elsevier.
     """
     def __init__(self):
         self.params = raptparams.Raptparams()
 
 
+    def get_frame_step_size(self):
+        return self.params.frame_step_size
+
+
     def pitch_tracking(self, original_audio, fs):
-        self._original_audio = original_audio
-        self._fs = fs
-        if self.params.is_two_pass_nccf:
-            downsample_rate, downsampled_audio = self._get_downsampled_audio(original_audio, fs,
-                                                                self.params.maximum_allowed_freq,
-                                                                self.params.is_run_filter)
-            # calculate parameters for RAPT with input audio
-            self._calculate_params(original_audio, fs, downsampled_audio, downsample_rate)
-            
-            # get F0 candidates using NCCF
-            nccf_results = self._run_nccf(original_audio, fs, downsampled_audio, downsample_rate)
-        else:
-            self._calculate_params(original_audio, fs)
-            nccf_results = self._run_nccf(original_audio, fs)
-
-        # dynamic programming - determine voicing state at each period candidate
-        freq_estimate = self._get_freq_estimate(nccf_results[0], fs)
-
-        # filter out high freq points
-        for i, item in enumerate(freq_estimate):
-            if item > 500.0:
-                freq_estimate[i] = 0.0
-            
-        return freq_estimate
-
-
-    def rapt_with_nccf(self, original_audio, fs):
         """
         The main method that perform pitch tracking RAPT algorithm
         :param original_audio: audio signal
@@ -88,9 +66,10 @@ class Rapt:
         self._original_audio = original_audio
         self._fs = fs
         if self.params.is_two_pass_nccf:
-            (downsample_rate, downsampled_audio) = self._get_downsampled_audio(original_audio, fs,
-                                                            self.params.maximum_allowed_freq,
-                                                            self.params.is_run_filter)
+            (downsample_rate, downsampled_audio) = self._get_downsampled_audio(
+                                                        original_audio, fs,
+                                                        self.params.maximum_allowed_freq,
+                                                        self.params.is_run_filter)
 
             # calculate parameters for RAPT with input audio
             self._calculate_params(original_audio, fs, downsampled_audio, downsample_rate)
@@ -108,10 +87,9 @@ class Rapt:
         for i, item in enumerate(freq_estimate):
             if item > 500.0:
                 freq_estimate[i] = 0.0
+        return nccf_results, freq_estimate
 
-        return (nccf_results, freq_estimate)
-       
-    
+
     def _get_downsampled_audio(self, original_audio, fs, maximum_allowed_freq, is_filter):
         """
         Calculate downsampling rate, downsample audio, return as tuple include
@@ -120,19 +98,19 @@ class Rapt:
         :param fs: sampling rate
         :param maximum_allowed_freq: maximum F0 freq
         :param is_filter: perform lowpass and high pass filter
-        :return: downsample rate and downsampled audio
+        :return: (tuple) downsample rate and downsampled audio
         """
         downsample_rate = self._calcualte_downsampling_rate(fs, maximum_allowed_freq)
         
         # low pass filter
-        # TODO(tuandn4) need high pass filter to remove silent intervals or low-amplitude unvoiced intervals
+        # TODO need high pass filter to remove silent intervals or low-amplitude unvoiced intervals
         if is_filter:
             # low-pass filter
             freq_cutoff = 0.05 / (0.5 * float(downsample_rate))
             taps = 100   # filter length = filter order + 1 = 100
 
             filter_coefs = signal.firwin(taps, cutoff=freq_cutoff, width=0.005, window='hanning')
-            filtered_audio = signal.lfilter(filter_coefs, 1, original_audio)
+            filtered_audio = signal.lfilter(filter_coefs, [1.0], original_audio)
 
             # high-pass filter
             # freq_cutoff = 80
@@ -145,7 +123,7 @@ class Rapt:
         else:
             downsampled_audio = self._downsample_audio(original_audio, fs, downsample_rate)
         
-        return (downsample_rate, downsampled_audio)
+        return downsample_rate, downsampled_audio
 
 
     def _calcualte_downsampling_rate(self, fs, maximum_f0):
@@ -184,7 +162,7 @@ class Rapt:
 
         # offset adjusts window centers to be 20ms apart regardless of frame step
         # size - so the goal here is to find diff between frame size and 20ms apart
-        self.params.rms_offset = int(round(((float(fs)/1000.0) * 20.0) - 
+        self.params.rms_offset = int(round(((float(fs)/1000.0) * 20.0) -
                                     self.params.samples_per_frame))
         
 
@@ -200,10 +178,10 @@ class Rapt:
         if self.params.is_two_pass_nccf:
             first_pass = self._first_pass_nccf(downsampled_audio, downsample_rate)
             nccf_results = self._second_pass_nccf(original_audio, fs, first_pass)
-            return (nccf_results, first_pass)
+            return nccf_results, first_pass
         else:
-            nccf_results = self._one_pass_nccf(original_audio,fs, False)
-            return (nccf_results, None)
+            nccf_results = self._one_pass_nccf(original_audio, fs)
+            return nccf_results, None
 
 
     def _one_pass_nccf(self, audio, fs):
@@ -242,20 +220,21 @@ class Rapt:
         lag_range = (self.nccfparams.longest_lag_per_frame - 1) - self.nccfparams.shortest_lag_per_frame
         candidates = [None] * self.nccfparams.max_frame_count
 
+        # for each frame calculate NCCF and mark result larger than 0.3 * local
+        # frame max
         for i in range(0, self.nccfparams.max_frame_count):
-            candidates[i] = self._get_firstpass_frame_results(audio, fs, i, lag_range)
-
+            candidates[i] = self._get_firstpass_frame_results(audio, i, lag_range)
         return candidates
 
 
     def _second_pass_nccf(self, original_audio, fs, first_pass):
         """
-        Return NCCF on downsampled audio, outputting a set of F0 that could be used
-        to determine the pitch by Dynamic programming
-        :param original_audio:
-        :param fs:
-        :param first_pass:
-        :return:
+        Return NCCF on original audio, outputting a set of NCCF each frame that
+        could be used to determine the pitch by Dynamic programming
+        :param original_audio: original audio
+        :param fs: sample rate
+        :param first_pass: first pass NCCF result
+        :return: list of candidates, each of which
         """
         self._get_nccf_params(original_audio, fs, False)
 
@@ -291,12 +270,12 @@ class Rapt:
         self.nccfparams.max_frame_count = int(round(float(len(audio)) / float(self.nccfparams.samples_per_frame)) - 1)
 
 
-    def _get_firstpass_frame_results(self, audio, fs, current_frame, lag_range):
+    def _get_firstpass_frame_results(self, audio, current_frame, lag_range):
         """
         Calculate correlation (theta) for all lags, and get the highest
         correlation val (theta_max) from the calculated lags for each frame
         """
-        all_lag_results = self._get_correlations_for_all_lags(audio, fs, current_frame, lag_range)
+        all_lag_results = self._get_correlations_for_all_lags(audio, current_frame, lag_range)
         marked_values = self._get_marked_results(all_lag_results, True)
         return marked_values
 
@@ -310,10 +289,14 @@ class Rapt:
         marked_values = self._get_marked_results(lag_results, False)
         return marked_values
 
-    
-    def _get_correlations_for_all_lags(self, audio, fs, current_frame, lag_range):
+
+    def _get_correlations_for_all_lags(self, audio,  current_frame, lag_range):
         """
-        Value of theta_max in NCCF equation, max for current frame
+        Calculate the correlations for current frame
+        :param audio: (array like) audio signal
+        :param current_frame: current frame
+        :param lag_range: lag range
+        :return: (tuple) array of each correlation and frame local maximum
         """
         candidates = [0.0] * lag_range
         max_correlation_val = 0.0
@@ -332,10 +315,19 @@ class Rapt:
             if candidates[k] > max_correlation_val:
                 max_correlation_val = candidates[k]
 
-        return (candidates, max_correlation_val)
+        return candidates, max_correlation_val
 
         
     def _get_correlations_for_input_lags(self, audio, current_frame, first_pass, lag_range):
+        """
+        For each frame (current_frame) find NCCF peak near first pass NCCF
+        peak. The audio is original audio not downsampled audio
+        :param audio: original audio
+        :param current_frame: current frame
+        :param first_pass: NCCF results return by first pass NCCF
+        :param lag_range:
+        :return: (tuple) contain list of candidates and NCCF local maximum
+        """
         candidates = [0.0] * lag_range
         max_correlation_val = 0.0
         sorted_firstpass_results = first_pass[current_frame]
@@ -345,7 +337,7 @@ class Rapt:
             # 1st pass lag value has been interpolated for original audio sample
             lag_peak = lag_val[0]
 
-            # for each peak check the closest 7 lags 
+            # for each peak check the closest 10 lags
             if lag_peak > 10 and lag_peak < lag_range - 11:
                 for k in range(lag_peak - 10, lag_peak + 11):
                     # determine if the current lag value causes us to go past the
@@ -359,11 +351,20 @@ class Rapt:
                     if candidates[k] > max_correlation_val:
                         max_correlation_val = candidates[k]
 
-        return (candidates, max_correlation_val)
+        return candidates, max_correlation_val
 
 
     def _get_marked_results(self, lag_results, is_first_pass = True):
-        # values that meet certain threshold shall be marked for consideration
+        """
+        If is_frist_pass is True then extrapolate the lag results of one frame
+        to find the maximum value and current lag. If is_first_pass is False
+        then keep only NCCFs in each lag_results which larger than min valid
+        correlation. After find all candidates, the return candidate must not
+        more than max_hypothesis_per_frame - 1
+        :param lag_results: NCCF of one frame
+        :param is_first_pass:
+        :return: (tuple) contain lag index and NCCF value
+        """
         min_valid_correlation = (lag_results[1] * self.params.min_acceptable_peak_val)
         max_allowed_candidates = self.params.max_hypotheses_per_frame - 1
         candidates = []
@@ -381,15 +382,24 @@ class Rapt:
             candidates.sort(key=lambda tup: tup[1], reverse=True)
             returned_candidates = candidates[0:max_allowed_candidates]
 
-            # re-sort before returning so that it is in order of low to highest k
+            # re-sort before returning so that it is in order of lag index
             returned_candidates.sort(key=lambda tup: tup[0])
         else:
             returned_candidates = candidates
 
         return returned_candidates
 
-    
-    def _get_correlation(self, audio_sample, frame, lag, is_first_pass = True):
+
+    def _get_correlation(self, audio_sample, frame, lag, is_first_pass=True):
+        """
+        Calculate NCCF for current lag in frame
+        :param audio_sample: audio signal
+        :param frame: current frame
+        :param lag: current lag
+        :param is_first_pass: if is first pass and using two pass nccf, so the
+                NCCF denominator will not contains the additive constant
+        :return: (float) NCCF value
+        """
         samples = 0
         samples_correlated_per_lag = self.nccfparams.samples_correlated_per_lag
         frame_start = frame * self.nccfparams.samples_per_frame
@@ -495,34 +505,35 @@ class Rapt:
     def _get_peak_lag_val(self, lag_results, lag_index):
         current_lag = lag_index + self.nccfparams.shortest_lag_per_frame
         extrapolated_lag = int(round(current_lag * self.params.sample_rate_ratio))
-        return (extrapolated_lag, lag_results[lag_index])
+        return extrapolated_lag, lag_results[lag_index]
 
 
-    def _get_correlations_for_all_lags(self, audio, fs, current_frame, lag_range):
-        # Value of theta_max in NCCF equation, max for the current frame
-        candidates = [0.0] * lag_range
-        max_correlation_val = 0.0
-        for k in range(0, lag_range):
-            current_lag = k + self.nccfparams.shortest_lag_per_frame
-
-            # determine if the current lag value causes us to go pass the end
-            # of the audio sample - if so - skip and set val to 0
-            if ((current_lag + (self.nccfparams.samples_correlated_per_lag - 1)
-                    + (current_frame * self.nccfparams.samples_per_frame)) >= len(audio)):
-                continue
-            
-            candidates[k] = self._get_correlation(audio, current_frame, current_lag)
-
-            if candidates[k] > max_correlation_val:
-                max_correlation_val = candidates[k]
-        
-        return (candidates, max_correlation_val)
+    # def _get_correlations_for_all_lags(self, audio, fs, current_frame, lag_range):
+    #     # Value of theta_max in NCCF equation, max for the current frame
+    #     candidates = [0.0] * lag_range
+    #     max_correlation_val = 0.0
+    #     for k in range(0, lag_range):
+    #         current_lag = k + self.nccfparams.shortest_lag_per_frame
+    #
+    #         # determine if the current lag value causes us to go pass the end
+    #         # of the audio sample - if so - skip and set val to 0
+    #         if ((current_lag + (self.nccfparams.samples_correlated_per_lag - 1)
+    #                 + (current_frame * self.nccfparams.samples_per_frame)) >= len(audio)):
+    #             continue
+    #
+    #         candidates[k] = self._get_correlation(audio, current_frame, current_lag)
+    #
+    #         if candidates[k] > max_correlation_val:
+    #             max_correlation_val = candidates[k]
+    #
+    #     return candidates, max_correlation_val
 
 
     # Dynamic programming to estimate F0
     def _get_freq_estimate(self, nccf_results, sample_rate):
         """
-        This method will obtain best candidate per frame and calc freq estimate per frame
+        This method will obtain best candidate per frame and calc freq estimate
+        per frame
         """
         results = []
         candidates = self._determine_state_per_frame(nccf_results, sample_rate)
@@ -561,9 +572,9 @@ class Rapt:
 
     def _select_candidates(self, nccf_results, sample_rate):
         """
-
-        :param nccf_results:
-        :param sample_rate:
+        Calculate cost per candidates by recursion
+        :param nccf_results: the NCCF results
+        :param sample_rate: sample rate
         :return:
         """
         max_for_frame = self._select_max_correlation_for_frame(nccf_results[0])
@@ -614,7 +625,7 @@ class Rapt:
 
     def _select_max_correlation_for_frame(self, nccf_results_frame):
         """
-        Find maximum NCCF
+        Find maximum NCCF in each frame
         """
         max_val = 0.0
         for hypothesis in nccf_results_frame:
@@ -700,7 +711,6 @@ class Rapt:
         #        self._get_rms_ratio(frame_idx))
         current_rms_ratio = self._get_rms_ratio(frame_idx)
 
-        # TODO(tuandn4) figure out how to better handle rms ratio on final frame
         if current_rms_ratio <= 0:
             return prev_cost + self.params.transition_cost
 
@@ -757,7 +767,7 @@ class Rapt:
         rms_curr = math.sqrt(float(curr_sum) / float(hanning_win_len))
         rms_prev = math.sqrt(float(prev_sum) / float(hanning_win_len))
 
-        return (rms_curr / rms_prev)
+        return rms_curr / rms_prev
     
             
 

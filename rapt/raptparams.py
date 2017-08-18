@@ -19,7 +19,7 @@ class Raptparams:
         self.maximum_allowed_freq = 500
 
         # Value of "F0_min" in NCCF equation:
-        self.minimum_allowed_freq = 50
+        self.minimum_allowed_freq = 60
 
         # Value of "t" in NCCF equation:
         self.frame_step_size = 0.01

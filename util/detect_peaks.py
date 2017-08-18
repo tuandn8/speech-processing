@@ -54,7 +54,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 
     Examples
     --------
-    >>> from detect_peaks import detect_peaks
+    >>> from util.detect_peaks import detect_peaks
     >>> x = np.random.randn(100)
     >>> x[60:81] = np.nan
     >>> # detect all peaks and plot data
