@@ -25,14 +25,11 @@ def levinson(R, n):
     a = np.zeros((n,1), dtype=float)
     ref = np.zeros((n,1), dtype=float)
 
+    a[0] = 1.0
     E = R[0]
-    k = -R[1]/E
-    a[0] = k
-    ref[0] = k
-    E = (1 - k**2) * E
 
     for i in range(1, n):
-        k = R[i+1]
+        k = R[i]
         for j in range(0, i):
             k += a[j]*R[i-j]
         k = -k/E
@@ -40,8 +37,12 @@ def levinson(R, n):
         a[i] = k
         E = (1 - k**2) * E
 
-        for j in range (0, i):
-            a[j] = a[j] + k * a[i-j-1]
+        tmp = [0.0] * n
+        for j in range(0, n):
+            tmp[j] = a[j]
+
+        for j in range (1, i):
+            a[j] = a[j] + k * tmp[i-j]
     
     return a, E, ref
 
