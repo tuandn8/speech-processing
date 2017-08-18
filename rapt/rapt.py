@@ -2,8 +2,8 @@ import math
 import numpy as np 
 from scipy import signal
 
-import raptparams
-import nccfparams
+from rapt import nccfparams
+from rapt import raptparams
 
 
 class Rapt:

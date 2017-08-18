@@ -29,7 +29,7 @@ coefs = sig.firls(filter_order, bands, desired, nyq=nyquist)
 y = sig.filtfilt(coefs, [1], x)
 Y = fft(y)
 
-print np.abs(y- x1).max()
+print (np.abs(y- x1).max())
 
 # plot orginal signal
 plt.figure(1)

@@ -1,8 +1,5 @@
 import numpy
-import rapt
-from rapt import Rapt
-import raptparams
-import nccfparams
+from rapt import raptparams, nccfparams, Rapt
 
 
 def _extrapolate_lag_val(lag_results, min_valid_correlation,

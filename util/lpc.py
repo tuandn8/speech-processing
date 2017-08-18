@@ -8,33 +8,37 @@ def lpc(x, N):
     R = R/(N-1)
     print(R.shape)
     
-    a, e,  ref = levinson(R, N)
+    a, e, ref = levinson(R, N)
     return a, e, ref
 
-def levinson(R, n):
-    a = np.zeros((n,1), dtype=float)
-    ref = np.zeros((n,1), dtype=float)
-
-    E = R[0]
-    k = -R[1]/E
-    a[0] = k
-    ref[0] = k
-    E = (1- k**2) * E
-
-    for i in range(1, n):
-        k = R[i+1]
-        for j in range(0, i):
-            k += a[j]*R[i-j]
-        k = -k/E
-
-        a[i] = k
-        E = (1 - k**2) * E
-
-        for j in range (0, i):
-            a[j] = a[j] + k * a[i-j-1]
+def levinson(R, order):
+    # coefficients array
+    a = np.empty(order+1, dtype=float)
+    # reflection array
+    ref = np.empty(order + 1, dtype=float)
+    # temporal array
+    tmp = np.empty(order + 1, dtype=float)
     
-    return a, E, ref
+    a[0] = 1.0
+    e = R[0]
 
+    for i in range(1, order + 1):
+        k = R[i]
+        for j in range(1,i):
+            k += a[j] * R[i-j]
+        ref[i-1] = -k/e
+        a[i] = ref[i-1]
+
+        for j in range(order):
+            t[j] = a[j]
+
+        for j in range(1, i):
+            a[j] += ref[i-1] * np.conj(t[i-j])
+
+        e *= 1 - ref[i-1] * np.conj(ref[i-1])
+
+    return a, e, ref 
+        
 
 def nextpow2(x):
     res = np.ceil(np.log2(x))
@@ -44,26 +48,26 @@ def nextpow2(x):
 from scipy.signal import lfilter
 import scipy.io as sio
 
-t = np.linspace(0, 4 * np.pi, 5000)
-x = np.sin(t)
-x = x[0:5000]
+t = np.linspace(0, 4 * np.pi, 500)
+x = np.sin(t)  - np.cos(t)
 
-sio.savemat('np_vector.mat', {'vect':x})
-print x.shape
-a = lpc(x, 3)
-print a.shape
-a = np.fliplr(a)
-a = np.append(a, 0)
-print a.shape
 
-est_x = lfilter(-a, [1], x)
+a, e, ref = lpc(x, 10)
+#a = np.fliplr(a)
+#a = np.append(a, 0)
+print(a)
+b = a[1:]
+b = np.insert(b, 0, 0)
+print(b)
+est_x = lfilter(-b, [1], x)
+
 e = x - est_x
 
 import matplotlib.pyplot as plt
 
-plt.plot(t, x, '-r')
+plt.plot(t, x, '-r',)
 plt.plot(t, est_x, '-b')
-
+plt.legend(('real','estimate'))
 plt.grid()
 plt.show()
 
