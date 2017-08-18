@@ -3,12 +3,9 @@ from scipy.io import wavfile
 import scipy.io as sio
 import numpy as np 
 import matplotlib.pyplot as plt
-import rapt
-import rapt_mau
-import raptparams
-import nccfparams
+from rapt import rapt, raptparams
 
-audio_file = "/home/vnc/workspace/speech-processing/VIVOSSPK02_R002.wav"
+audio_file = "VIVOSSPK02_R002.wav"
 
 [fs, s] = wavfile.read(audio_file)
 
@@ -17,13 +14,18 @@ if len(s.shape) > 1:
     s = s.astype(int)
 
 algo = rapt.Rapt()
-freq = algo.pitch_tracking(s, fs)
+nccf, freq  = algo.pitch_tracking(s, fs)
 
-freq_mau = rapt_mau.rapt(audio_file)
-
+#freq_mau = rapt_mau.rapt(audio_file)
+print(len(s) / len(freq))
 plt.plot(freq, 'r-')
+# plt.plot(s)
+# rparams = raptparams.Raptparams()
+# plt.plot(np.linspace(0, len(s), num=len(freq)), freq)
 #plt.plot(freq_mau, 'bo')
 plt.show()
+
+print (freq)
 
 # params = raptparams.Raptparams()
 # nccf = nccfparams.Nccfparams()
