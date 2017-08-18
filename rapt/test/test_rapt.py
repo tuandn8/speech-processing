@@ -3,9 +3,11 @@ from scipy.io import wavfile
 import scipy.io as sio
 import numpy as np 
 import matplotlib.pyplot as plt
-from rapt import rapt, raptparams
+import rapt
 
-audio_file = "VIVOSSPK02_R002.wav"
+
+
+audio_file = "test\\VIVOSSPK02_R002.wav"
 
 [fs, s] = wavfile.read(audio_file)
 
