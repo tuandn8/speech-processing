@@ -1,12 +1,13 @@
 import numpy as np
 import scipy.signal as sig
+import scipy.io as sio 
 import pywt
 
 import matplotlib.pyplot as plt
 
 
-from util import lpc
-from rapt import rapt
+import lpc
+import rapt
 
 class WaveletExtractor:
 
@@ -16,6 +17,8 @@ class WaveletExtractor:
 
     def _get_pitch(self, original_audio, fs):
         nccf, freq = self.__pitch_extractor.pitch_tracking(original_audio, fs)
+        plt.plot(freq)
+        plt.show()
         return freq
 
 
@@ -28,7 +31,7 @@ class WaveletExtractor:
         :param pitch: pitch estimated from self._get_pitch
         :param lpc_order: LPC order
         :param window_length: window length
-        :return: residual signal only for voiced region
+        :return: list residual signal only for each voiced region
         """
 
         # First find voiced speech portion, only extract portion has length
@@ -48,14 +51,14 @@ class WaveletExtractor:
                 if n_consecutive_frame >= self._minimum_pitchs_need:
                     voiced_start = (i+1-n_consecutive_frame) * self._samples_per_frame
                     voiced_end   = (i + 1) * self._samples_per_frame
-                    voiced_signal.append([original_audio[voiced_start:voiced_end]])
+                    voiced_signal.append((original_audio[voiced_start:voiced_end]))
 
                 n_consecutive_frame = 0
 
         # LP analysis on voiced portion
         n_voice_portion = len(voiced_signal)
         for i in range(n_voice_portion):
-            voiced_portion = voiced_signal[i][0]
+            voiced_portion = voiced_signal[i]
             n_lpc_frame = len(voiced_portion) // self._samples_per_lpc_window
 
             for j in range(n_lpc_frame):
@@ -63,11 +66,14 @@ class WaveletExtractor:
                 lpc_frame_end = (j+1) * self._samples_per_lpc_window
                 lpc_frame = voiced_portion[lpc_frame_start:lpc_frame_end]
                 a, e, ref = lpc.lpc(lpc_frame, lpc_order)
-                a = np.append(0, -a)
+                print(a)
+                b = np.insert(a[1:], 0, 0)
+                print(b)
+                
 
-                lpc_frame_est = sig.lfilter(-a, 1.0, lpc_frame)
+                lpc_frame_est = sig.lfilter(-b, 1.0, lpc_frame)
                 residual = lpc_frame - lpc_frame_est
-                residual_voiced_signal.append(lpc_frame - lpc_frame_est)
+                residual_voiced_signal.append((lpc_frame, lpc_frame_est, lpc_frame - lpc_frame_est))
 
                 # if you need can use lpc for remain of voiced portion
                 # remain_voiced_portion = voiced_portion[n_lpc_frame * self._samples_per_window:]
@@ -87,4 +93,10 @@ class WaveletExtractor:
         pitch = self._get_pitch(original_audio, fs)
         residual_signal = self._get_residual_signal(original_audio, fs, pitch)
 
-        plt.plot(residual_signal)
+        sio.savemat('residual', {'residual': residual_signal})
+
+
+        plt.plot(residual_signal[0][0], 'b')
+        plt.plot(residual_signal[0][1], 'r')
+        plt.legend(('signal','estimate'))
+        plt.show()
