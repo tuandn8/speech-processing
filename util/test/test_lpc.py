@@ -1,9 +1,8 @@
 from scipy.signal import lfilter
-from scipy.fftpack import fft, ifft
 import scipy.io as sio
 import numpy as np
 
-import lpc
+from util import lpc
 
 # t = np.linspace(0.1, 4 * np.pi, 500)
 # x = np.sin(t) + np.log(t)
@@ -35,12 +34,12 @@ x = np.reshape(x,(len(x), ))
 
 sio.savemat('x',{'x':x})
 
-a,e,ref = lpc.lpc(x, 6)
+a,e,ref = lpc(x, 6)
 b = a[1:]
 b = np.insert(b, 0, 0)
-print(b)
+print(a)
 
-est_x = lfilter(-b, [1], x)
+est_x = lfilter(-np.insert(a[1:], 0, 0), [1], x)
 e = x - est_x
 
 import matplotlib.pyplot as plt

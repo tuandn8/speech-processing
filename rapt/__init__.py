@@ -1,6 +1,5 @@
 from .rapt import Rapt
-from .nccfparams import Nccfparams as NccfParameters
-from .raptparams import Raptparams as RaptParameters
+from .wtextractor import  WaveletExtractor
 
-__all__ = ['Rapt','NccfParameters','RaptParameters']
+__all__ = ["Rapt","WaveletExtractor"]
 

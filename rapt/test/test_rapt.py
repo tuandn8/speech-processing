@@ -3,11 +3,11 @@ from scipy.io import wavfile
 import scipy.io as sio
 import numpy as np 
 import matplotlib.pyplot as plt
-import rapt
+from rapt import Rapt
 
 
 
-audio_file = "test\\VIVOSSPK02_R002.wav"
+audio_file = "VIVOSSPK02_R002.wav"
 
 [fs, s] = wavfile.read(audio_file)
 
@@ -15,7 +15,7 @@ if len(s.shape) > 1:
     s = s[:,0]/2.0  + s[:,1]/2.0
     s = s.astype(int)
 
-algo = rapt.Rapt()
+algo = Rapt()
 nccf, freq  = algo.pitch_tracking(s, fs)
 
 #freq_mau = rapt_mau.rapt(audio_file)

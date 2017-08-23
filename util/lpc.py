@@ -1,13 +1,12 @@
 from scipy.fftpack import fft, ifft
-import numpy as np 
+import numpy as np
 
 def lpc(x, N):
     # calcualte autocorrelation vector or matrix
     X = fft(x, 2** nextpow2(2*len(x) - 1))
     R = np.real(ifft(abs(X)**2))
     R = R/(N-1)
-    print(R.shape)
-    
+
     a, e, ref = levinson(R, N)
     return a, e, ref
 
@@ -18,7 +17,7 @@ def levinson(R, order):
     ref = np.empty(order + 1, dtype=float)
     # temporal array
     tmp = np.empty(order + 1, dtype=float)
-    
+
     a[0] = 1.0
     e = R[0]
 
@@ -37,8 +36,8 @@ def levinson(R, order):
 
         e *= 1 - ref[i-1] * np.conj(ref[i-1])
 
-    return a, e, ref 
-        
+    return a, e, ref
+
 
 def nextpow2(x):
     res = np.ceil(np.log2(x))
