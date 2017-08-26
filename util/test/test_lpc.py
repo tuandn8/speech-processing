@@ -32,7 +32,7 @@ x = lfilter([1], [1, 1/2, 1/3, 1/4], noise)
 x = x[45904:50000]
 x = np.reshape(x,(len(x), ))
 
-sio.savemat('x',{'x':x})
+#sio.savemat('x',{'x':x})
 
 a,e,ref = lpc(x, 6)
 b = a[1:]

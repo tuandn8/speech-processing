@@ -1,4 +1,4 @@
-from rapt import WaveletExtractor
+from glottalsource import WaveletExtractor
 import matplotlib.pyplot as plt 
 
 

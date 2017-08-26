@@ -5,7 +5,7 @@ import pywt
 import matplotlib.pyplot as plt
 
 from util import lpc
-import rapt
+from . import rapt
 
 class WaveletExtractor:
     """
@@ -27,10 +27,10 @@ class WaveletExtractor:
         is normalized within [-1,1] to reduce intra-speaker variation.
     3.  Pitch-synchronous windowing: with the pitch periods estimated on step
         1, pitch pulses in the residual signal are located. For each pitch pulse,
-        pitch-synchronous wavelet analysis is applied with a Hamming window of two
-        pitch periods long. Let t_i-1, t_i, t_i+1 denote the locations of three
-        successive pitch pulses. The analysis window for the pitch pulse span from
-        t_i-1 to t_i+1.
+        pitch-synchronous wavelet analysis is applied with a Hamming window of
+        two pitch periods long. Let t_i-1, t_i, t_i+1 denote the locations of
+        three successive pitch pulses. The analysis window for the pitch
+        pulse span from t_i-1 to t_i+1.
     4.  Wavelet transform of the residual signal: applied the wavelet transform
         to windowed residual signal.
     5.  Generating the features parameters: divide each octave group to
@@ -230,6 +230,3 @@ class WaveletExtractor:
         pitch_pulse_idx = self._get_pitch_pulses(fs, residual_signal, pitch)
         wavelet_coeffs = self._feature_extract(pitch_pulse_idx, residual_signal)
         return wavelet_coeffs
-
-
-        

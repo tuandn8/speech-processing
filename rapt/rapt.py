@@ -2,8 +2,8 @@ import math
 import numpy as np 
 from scipy import signal
 
-from .raptparams import Raptparams
-from .nccfparams import  Nccfparams
+from . import raptparams
+from . import nccfparams
 
 
 class Rapt:
@@ -49,7 +49,7 @@ class Rapt:
             Speech Coding and Synthesis, Netherlands:Elsevier.
     """
     def __init__(self):
-        self.params = Raptparams()
+        self.params = raptparams.Raptparams()
 
 
     def get_frame_step_size(self):
@@ -249,7 +249,7 @@ class Rapt:
 
     def _get_nccf_params(self, audio, fs, is_first_pass):
         """Creates and returns nccf params object w/ nccf-specific values"""
-        self.nccfparams = Nccfparams()
+        self.nccfparams = nccfparams.Nccfparams()
 
         # value 'n' in NCCF equation
         self.nccfparams.samples_correlated_per_lag = int(round(self.params.correlation_window_size * fs))

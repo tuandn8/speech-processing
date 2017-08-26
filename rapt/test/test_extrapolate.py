@@ -1,5 +1,5 @@
 import numpy
-from rapt import raptparams, nccfparams, Rapt
+from glottalsource import raptparams, nccfparams, rapt
 
 
 def _extrapolate_lag_val(lag_results, min_valid_correlation,
