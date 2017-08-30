@@ -100,7 +100,7 @@ class Rapt:
         :param is_filter: perform lowpass and high pass filter
         :return: (tuple) downsample rate and downsampled audio
         """
-        downsample_rate = self._calcualte_downsampling_rate(fs, maximum_allowed_freq)
+        downsample_rate = self._calculate_downsampling_rate(fs, maximum_allowed_freq)
         
         # low pass filter
         # TODO need high pass filter to remove silent intervals or low-amplitude unvoiced intervals
@@ -126,7 +126,7 @@ class Rapt:
         return downsample_rate, downsampled_audio
 
 
-    def _calcualte_downsampling_rate(self, fs, maximum_f0):
+    def _calculate_downsampling_rate(self, fs, maximum_f0):
         """Determines downsampling rate to appy to the audio input passed for 
         RAPT processing"""
         return int(fs/ round(fs/(4 * maximum_f0)))
@@ -557,7 +557,7 @@ class Rapt:
         for result in nccf_results:
             result.append((0, 0.0))
 
-        # now call recursive function that will calcualte cost per candidate
+        # now call recursive function that will calculate cost per candidate
         final_candiates = self._select_candidates(nccf_results, sample_rate)
 
         # sort results - take the lag of the lowest cost candidate for its last item
@@ -582,7 +582,8 @@ class Rapt:
 
         for candidate in nccf_results[0]:
             best_cost = None
-            local_cost = self._calcualte_local_cost(candidate, max_for_frame, sample_rate)
+            local_cost = self._calculate_local_cost(candidate, max_for_frame,
+                                                   sample_rate)
 
             for initial_candidate in [(0.0, (1, 0.1)), (0.0, (0, 0.0))]:
                 delta_cost = self._get_delta_cost(candidate, initial_candidate, 0)
@@ -591,20 +592,22 @@ class Rapt:
                     best_cost = total_cost
             frame_candidates.append([(best_cost, candidate)])
 
-        # now we have initial costs for frame 0. lets loop through later frames
-        final_candiates = self._get_next_cands(1, frame_candidates, nccf_results, sample_rate)
+        # find frame candidates
+        nccf_len = len(nccf_results)
+        for frame_idx in range(1, nccf_len):
+            frame_candidates = self._get_next_cands(frame_idx, frame_candidates,
+                                 nccf_results[frame_idx], sample_rate)
+        return frame_candidates
 
-        return final_candiates
 
+    def _get_next_cands(self, frame_idx, prev_candidates, nccf_result, sample_rate):
+        frame_max = self._select_max_correlation_for_frame(nccf_result)
+        final_candidates = []
 
-    def _get_next_cands(self, frame_idx, prev_candidates, nccf_results, sample_rate):
-        frame_max = self._select_max_correlation_for_frame(nccf_results[frame_idx])
-        final_candiates = []
-
-        for candidate in nccf_results[frame_idx]:
+        for candidate in nccf_result:
             best_cost = None
             returned_path = None
-            local_cost = self._calcualte_local_cost(candidate, frame_max, sample_rate)
+            local_cost = self._calculate_local_cost(candidate, frame_max, sample_rate)
 
             for prev_candidate in prev_candidates:
                 delta_cost = self._get_delta_cost(candidate, prev_candidate[-1], frame_idx)
@@ -613,14 +616,11 @@ class Rapt:
                 if best_cost is None or total_cost <= best_cost:
                     best_cost = total_cost
                     returned_path = list(prev_candidate)
+
             returned_path.append((best_cost, candidate))
-            final_candiates.append(returned_path)
+            final_candidates.append(returned_path)
 
-        next_idx = frame_idx + 1
-        if next_idx < len(nccf_results):
-            return self._get_next_cands(next_idx, final_candiates, nccf_results, sample_rate)
-
-        return final_candiates
+        return final_candidates
 
 
     def _select_max_correlation_for_frame(self, nccf_results_frame):
@@ -635,9 +635,9 @@ class Rapt:
         return max_val
 
 
-    def _calcualte_local_cost(self, candidate, max_corr_for_frame, sample_rate):
+    def _calculate_local_cost(self, candidate, max_corr_for_frame, sample_rate):
         """
-        Calcualte local cost of hypothesis d_i,j
+        Calculate local cost of hypothesis d_i,j
         d_i_j = 1 - Cij * (1 - beta * Lij) for voiced
               = VO_BIAS + max(Cij)  for unvoiced
         :param candidate: the value of the j_th local maximum at frame i
@@ -757,7 +757,6 @@ class Rapt:
         # sine window len may be reduced (sine we are end of sample), make sure the
         # hanning window vals match up with our slice of the audio sample
         hanning_win_val = hanning_win_vals[:hanning_win_len]
-
         curr_sum = np.sum((audio_slice * hanning_win_val) ** 2)
         prev_sum = np.sum((prev_audio_slice * hanning_win_val) ** 2)
 
